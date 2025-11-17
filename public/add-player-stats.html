@@ -1,13 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add Player Statistics - Volleyball Management</title>
     <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
     <nav class="nav">
         <div class="nav-container">
@@ -17,7 +15,7 @@
                 <a href="/players-list" class="nav-link">Players List</a>
                 <a href="/add-player" class="nav-link">Add Player</a>
                 <a href="/add-session" class="nav-link">Add Session</a>
-                <a href="/add-player-stats" class="nav-link">Add Player Stats</a>
+                <a href="/add-player-stats" class="nav-link active">Add Player Stats</a>
             </div>
         </div>
     </nav>
@@ -25,7 +23,7 @@
     <div class="container">
         <div class="add-player-stats">
             <h1>Add Player Statistics</h1>
-
+            
             <!-- Success/Error Messages -->
             <div id="messageContainer" style="display: none;" class="alert"></div>
 
@@ -44,7 +42,7 @@
             <!-- Player Statistics Form -->
             <form id="addPlayerStatsForm" class="player-stats-form" style="display: none;">
                 <h2>Add Player Statistics for <span id="selectedSessionDate"></span></h2>
-
+                
                 <div class="form-group">
                     <label for="player_id">Player *</label>
                     <select id="player_id" name="player_id" required>
@@ -129,27 +127,29 @@
             try {
                 const data = await fetchData('/api/sessions');
                 const sessionSelect = document.getElementById('session_id');
-
+                
                 if (data && data.sessions && data.sessions.length > 0) {
                     sessionSelect.innerHTML = '<option value="">Select a session</option>' +
-                        data.sessions.map(session =>
-                            `<option value="${session.id}">${new Date(session.session_date).toLocaleDateString()}</option>`
+                        data.sessions.map(session => 
+                            `<option value="${session.id}">${new Date(session.session_date).toLocaleDateString()} (ID: ${session.id})</option>`
                         ).join('');
                 } else {
                     sessionSelect.innerHTML = '<option value="">No sessions available</option>';
+                    showMessage('No sessions found. Please add a session first.', 'error');
                 }
 
                 // Check if session_id is in URL parameters
                 const urlParams = new URLSearchParams(window.location.search);
                 const sessionId = urlParams.get('session_id');
                 const sessionDate = urlParams.get('session_date');
-
+                
                 if (sessionId && sessionDate) {
                     sessionSelect.value = sessionId;
                     onSessionChange(sessionId, sessionDate);
                 }
             } catch (error) {
                 console.error('Error loading sessions:', error);
+                showMessage('Error loading sessions: ' + error.message, 'error');
             }
         }
 
@@ -158,41 +158,43 @@
             try {
                 const data = await fetchData('/api/players-list');
                 const playerSelect = document.getElementById('player_id');
-
+                
                 if (data && data.players && data.players.length > 0) {
                     playerSelect.innerHTML = '<option value="">Select a player</option>' +
-                        data.players.map(player =>
+                        data.players.map(player => 
                             `<option value="${player.id}">${player.full_name} (${player.player_id})</option>`
                         ).join('');
                 } else {
                     playerSelect.innerHTML = '<option value="">No players available</option>';
+                    showMessage('No players found. Please add players first.', 'error');
                 }
             } catch (error) {
                 console.error('Error loading players:', error);
+                showMessage('Error loading players: ' + error.message, 'error');
             }
         }
 
         // Handle session change
-        function onSessionChange(sessionId, sessionDate) {
+        async function onSessionChange(sessionId, sessionDate) {
             const form = document.getElementById('addPlayerStatsForm');
             const sessionPlayers = document.getElementById('sessionPlayers');
-
+            
             if (sessionId) {
                 // Show the form
                 form.style.display = 'block';
                 sessionPlayers.style.display = 'block';
-
+                
                 // Update selected session date
                 if (sessionDate) {
                     document.getElementById('selectedSessionDate').textContent = new Date(sessionDate).toLocaleDateString();
                 } else {
                     const sessionSelect = document.getElementById('session_id');
                     const selectedOption = sessionSelect.options[sessionSelect.selectedIndex];
-                    document.getElementById('selectedSessionDate').textContent = selectedOption.text;
+                    document.getElementById('selectedSessionDate').textContent = selectedOption.text.split(' (ID:')[0];
                 }
-
+                
                 // Load players for this session
-                loadSessionPlayers(sessionId);
+                await loadSessionPlayers(sessionId);
             } else {
                 form.style.display = 'none';
                 sessionPlayers.style.display = 'none';
@@ -202,26 +204,42 @@
         // Load players who have stats for this session
         async function loadSessionPlayers(sessionId) {
             try {
-                // This would need a new API endpoint to get players for a specific session
-                // For now, we'll just show a message
+                const data = await fetchData(`/api/sessions/${sessionId}/players`);
                 const playersStatsList = document.getElementById('playersStatsList');
-                playersStatsList.innerHTML = '<div class="no-data">Player statistics for this session will appear here</div>';
+                
+                if (data && data.players && data.players.length > 0) {
+                    playersStatsList.innerHTML = data.players.map(player => `
+                        <div class="player-stats-item">
+                            <div class="player-info">
+                                <strong>${player.full_name}</strong> (${player.player_id})
+                            </div>
+                            <div class="player-stats">
+                                <span class="stat">Points: ${player.points_scored}</span>
+                                <span class="stat">Saves: ${player.saves}</span>
+                                <span class="stat">${player.mvp_award ? '⭐ MVP' : ''}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    playersStatsList.innerHTML = '<div class="no-data">No player statistics recorded for this session yet</div>';
+                }
             } catch (error) {
                 console.error('Error loading session players:', error);
+                document.getElementById('playersStatsList').innerHTML = '<div class="no-data">Error loading player statistics</div>';
             }
         }
 
         // Handle form submission
-        document.getElementById('addPlayerStatsForm').addEventListener('submit', async function (e) {
+        document.getElementById('addPlayerStatsForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-
+            
             const submitBtn = document.getElementById('submitBtn');
             const originalText = submitBtn.textContent;
-
+            
             // Disable button and show loading
             submitBtn.disabled = true;
             submitBtn.textContent = 'Adding Stats...';
-
+            
             const formData = {
                 player_id: document.getElementById('player_id').value,
                 session_id: document.getElementById('session_id').value,
@@ -245,15 +263,15 @@
 
                 if (result) {
                     showMessage('Player statistics added successfully!', 'success');
-
+                    
                     // Reset form
-                    document.getElementById('addPlayerStatsForm').reset();
+                    document.getElementById('player_id').value = '';
                     document.getElementById('points_scored').value = 0;
                     document.getElementById('saves').value = 0;
                     document.getElementById('mvp_award').checked = false;
-
+                    
                     // Reload session players
-                    loadSessionPlayers(formData.session_id);
+                    await loadSessionPlayers(formData.session_id);
                 }
             } catch (error) {
                 console.error('Error adding player stats:', error);
@@ -266,17 +284,16 @@
         });
 
         // Event listener for session selection change
-        document.getElementById('session_id').addEventListener('change', function () {
+        document.getElementById('session_id').addEventListener('change', function() {
             onSessionChange(this.value);
         });
 
         // Initialize page
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function() {
             console.log('Add Player Stats page loaded');
             loadSessions();
             loadPlayers();
         });
     </script>
 </body>
-
 </html>

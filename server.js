@@ -52,6 +52,9 @@ async function initializeDatabase() {
       )
     `);
 
+    // Drop and recreate player_sessions table with new schema
+    await client.query('DROP TABLE IF EXISTS player_sessions CASCADE');
+    
     // Create player_sessions table (links players to sessions with stats)
     await client.query(`
       CREATE TABLE IF NOT EXISTS player_sessions (
@@ -340,6 +343,7 @@ app.post('/api/player-sessions', async (req, res) => {
     res.json({ message: 'Player session statistics added successfully' });
   } catch (err) {
     await client.query('ROLLBACK');
+    console.error('Error adding player session:', err);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -359,6 +363,24 @@ app.get('/api/players/:id/sessions', async (req, res) => {
     );
     
     res.json({ sessions: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get players for a specific session
+app.get('/api/sessions/:id/players', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.id, p.full_name, p.player_id, ps.points_scored, ps.saves, ps.mvp_award
+       FROM players p
+       JOIN player_sessions ps ON p.id = ps.player_id
+       WHERE ps.session_id = $1
+       ORDER BY p.full_name`,
+      [req.params.id]
+    );
+    
+    res.json({ players: result.rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -434,7 +456,21 @@ app.get('/api/check-player-id/:player_id', async (req, res) => {
 // Database repair endpoint
 app.post('/api/repair-database', async (req, res) => {
   try {
-    await pool.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS age INTEGER');
+    // Drop and recreate player_sessions table
+    await pool.query('DROP TABLE IF EXISTS player_sessions CASCADE');
+    await pool.query(`
+      CREATE TABLE player_sessions (
+        id SERIAL PRIMARY KEY,
+        player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+        session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        points_scored INTEGER DEFAULT 0,
+        saves INTEGER DEFAULT 0,
+        mvp_award BOOLEAN DEFAULT FALSE,
+        attendance_status VARCHAR(20) DEFAULT 'Present',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(player_id, session_id)
+      )
+    `);
     res.json({ message: 'Database repaired successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
