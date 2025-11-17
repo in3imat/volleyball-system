@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Player - Volleyball Management</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">Volleyball Community</a>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Dashboard</a>
+                <a href="/players-list" class="nav-link">Players List</a>
+                <a href="/add-player" class="nav-link active">Add Player</a>
+                <a href="/add-session" class="nav-link">Add Session</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="add-player">
+            <h1>Add New Player</h1>
+            
+            <!-- Success/Error Messages -->
+            <div id="messageContainer" style="display: none;" class="alert"></div>
+
+            <form id="addPlayerForm" class="player-form">
+                <div class="form-group">
+                    <label for="player_id">Player ID *</label>
+                    <input type="text" id="player_id" name="player_id" required 
+                           placeholder="e.g., VB001, JOHN001">
+                    <small class="form-help">Choose a unique ID for the player</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="full_name">Full Name *</label>
+                    <input type="text" id="full_name" name="full_name" required 
+                           placeholder="Enter player's full name">
+                </div>
+
+                <div class="form-group">
+                    <label for="phone_number">Phone Number</label>
+                    <input type="tel" id="phone_number" name="phone_number" 
+                           placeholder="Enter phone number">
+                </div>
+
+                <div class="form-group">
+                    <label for="instagram_username">Instagram Username</label>
+                    <input type="text" id="instagram_username" name="instagram_username" 
+                           placeholder="Without @ symbol">
+                </div>
+
+                <div class="form-group">
+                    <label for="age">Age</label>
+                    <input type="number" id="age" name="age" min="10" max="80" 
+                           placeholder="Enter age">
+                </div>
+
+                <div class="form-group">
+                    <label for="skill_level">Skill Level</label>
+                    <select id="skill_level" name="skill_level">
+                        <option value="Beginner">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                    </select>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        Add Player
+                    </button>
+                    <a href="/players-list" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Base URL for API
+        const API_BASE_URL = window.location.origin;
+
+        // Function to show messages
+        function showMessage(message, type) {
+            const messageContainer = document.getElementById('messageContainer');
+            messageContainer.textContent = message;
+            messageContainer.className = `alert alert-${type}`;
+            messageContainer.style.display = 'block';
+            
+            // Auto hide success messages after 3 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    messageContainer.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        // Function to fetch data
+        async function fetchData(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Server returned ${response.status}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('Error:', error);
+                throw error;
+            }
+        }
+
+        document.getElementById('addPlayerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.textContent;
+            
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Adding Player...';
+            
+            const formData = {
+                player_id: document.getElementById('player_id').value.trim(),
+                full_name: document.getElementById('full_name').value.trim(),
+                phone_number: document.getElementById('phone_number').value.trim(),
+                instagram_username: document.getElementById('instagram_username').value.trim(),
+                age: document.getElementById('age').value ? parseInt(document.getElementById('age').value) : null,
+                skill_level: document.getElementById('skill_level').value
+            };
+
+            // Basic validation
+            if (!formData.player_id || !formData.full_name) {
+                showMessage('Player ID and Full Name are required', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+                return;
+            }
+
+            try {
+                const result = await fetchData('/api/players', {
+                    method: 'POST',
+                    body: JSON.stringify(formData)
+                });
+
+                if (result) {
+                    showMessage('Player added successfully!', 'success');
+                    
+                    // Reset form
+                    document.getElementById('addPlayerForm').reset();
+                    
+                    // Redirect to players list after success
+                    setTimeout(() => {
+                        window.location.href = '/players-list';
+                    }, 1500);
+                }
+            } catch (error) {
+                console.error('Error adding player:', error);
+                showMessage(`Error adding player: ${error.message}`, 'error');
+            } finally {
+                // Re-enable button
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+
+        // Check if player ID already exists (real-time validation)
+        document.getElementById('player_id').addEventListener('blur', async function() {
+            const playerId = this.value.trim();
+            if (!playerId) return;
+
+            try {
+                const result = await fetchData(`/api/check-player-id/${playerId}`);
+                if (result.exists) {
+                    showMessage(`Player ID "${playerId}" already exists. Please choose a different ID.`, 'error');
+                    this.focus();
+                }
+            } catch (error) {
+                console.error('Error checking player ID:', error);
+                // Don't show error for check failure, as it might be due to network issues
+            }
+        });
+
+        // Clear message when user starts typing
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('input', () => {
+                const messageContainer = document.getElementById('messageContainer');
+                if (messageContainer.style.display !== 'none') {
+                    messageContainer.style.display = 'none';
+                }
+            });
+        });
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Add Player page loaded');
+        });
+    </script>
+</body>
+</html>

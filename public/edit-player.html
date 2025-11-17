@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Player - Volleyball Management</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">Volleyball Community</a>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Dashboard</a>
+                <a href="/players-list.html" class="nav-link">Players List</a>
+                <a href="/add-player.html" class="nav-link">Add Player</a>
+                <a href="/add-session.html" class="nav-link">Add Session</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="edit-player">
+            <h1>Edit Player</h1>
+            <div id="loadingMessage">Loading player information...</div>
+            <form id="editPlayerForm" class="player-form" style="display: none;">
+                <div class="form-group">
+                    <label for="player_id">Player ID *</label>
+                    <input type="text" id="player_id" name="player_id" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="full_name">Full Name *</label>
+                    <input type="text" id="full_name" name="full_name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="phone_number">Phone Number</label>
+                    <input type="tel" id="phone_number" name="phone_number">
+                </div>
+
+                <div class="form-group">
+                    <label for="instagram_username">Instagram Username</label>
+                    <input type="text" id="instagram_username" name="instagram_username">
+                </div>
+
+                <div class="form-group">
+                    <label for="age">Age</label>
+                    <input type="number" id="age" name="age" min="10" max="80">
+                </div>
+
+                <div class="form-group">
+                    <label for="skill_level">Skill Level</label>
+                    <select id="skill_level" name="skill_level">
+                        <option value="Beginner">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                    </select>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Update Player</button>
+                    <a href="/players-list.html" class="btn btn-secondary">Cancel</a>
+                    <button type="button" id="deletePlayerBtn" class="btn btn-danger">Delete Player</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Get player ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const playerId = urlParams.get('id');
+
+        // Load player data
+        async function loadPlayerData() {
+            if (!playerId) {
+                alert('No player ID specified');
+                window.location.href = '/players-list.html';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/players/${playerId}`);
+                const data = await response.json();
+
+                if (response.ok && data.player) {
+                    displayPlayerForm(data.player);
+                } else {
+                    alert('Player not found');
+                    window.location.href = '/players-list.html';
+                }
+            } catch (error) {
+                console.error('Error loading player:', error);
+                alert('Error loading player data');
+            }
+        }
+
+        // Display player data in form
+        function displayPlayerForm(player) {
+            document.getElementById('loadingMessage').style.display = 'none';
+            document.getElementById('editPlayerForm').style.display = 'block';
+
+            document.getElementById('player_id').value = player.player_id;
+            document.getElementById('full_name').value = player.full_name;
+            document.getElementById('phone_number').value = player.phone_number || '';
+            document.getElementById('instagram_username').value = player.instagram_username || '';
+            document.getElementById('age').value = player.age || '';
+            document.getElementById('skill_level').value = player.skill_level;
+        }
+
+        // Update player
+        document.getElementById('editPlayerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                player_id: document.getElementById('player_id').value,
+                full_name: document.getElementById('full_name').value,
+                phone_number: document.getElementById('phone_number').value,
+                instagram_username: document.getElementById('instagram_username').value,
+                age: document.getElementById('age').value ? parseInt(document.getElementById('age').value) : null,
+                skill_level: document.getElementById('skill_level').value
+            };
+
+            try {
+                const response = await fetch(`/api/players/${playerId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    alert('Player updated successfully!');
+                    window.location.href = '/players-list.html';
+                } else {
+                    alert('Error updating player');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error updating player');
+            }
+        });
+
+        // Delete player
+        document.getElementById('deletePlayerBtn').addEventListener('click', function() {
+            if (confirm('Are you sure you want to delete this player? This action cannot be undone.')) {
+                deletePlayer();
+            }
+        });
+
+        async function deletePlayer() {
+            try {
+                const response = await fetch(`/api/players/${playerId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    alert('Player deleted successfully!');
+                    window.location.href = '/players-list.html';
+                } else {
+                    alert('Error deleting player');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error deleting player');
+            }
+        }
+
+        // Add delete API endpoint to server.js
+        // Add this to your server.js file:
+        /*
+        app.delete('/api/players/:id', (req, res) => {
+            const sql = 'DELETE FROM players WHERE id = ?';
+            db.run(sql, [req.params.id], function(err) {
+                if (err) {
+                    res.status(400).json({ error: err.message });
+                    return;
+                }
+                res.json({ message: 'Player deleted successfully' });
+            });
+        });
+        */
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', loadPlayerData);
+    </script>
+</body>
+</html>

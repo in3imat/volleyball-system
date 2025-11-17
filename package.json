@@ -1,0 +1,22 @@
+{
+  "name": "volleyball-system",
+  "version": "1.0.0",
+  "description": "Volleyball Player Management System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "echo 'No build process needed'"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "pg": "^8.11.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["volleyball", "management", "players"],
+  "author": "Your Name",
+  "license": "MIT"
+}
