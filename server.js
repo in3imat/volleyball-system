@@ -43,17 +43,27 @@ async function initializeDatabase() {
       )
     `);
 
-    // Create player_sessions table
+    // Create sessions table (just dates)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id SERIAL PRIMARY KEY,
+        session_date DATE UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create player_sessions table (links players to sessions with stats)
     await client.query(`
       CREATE TABLE IF NOT EXISTS player_sessions (
         id SERIAL PRIMARY KEY,
         player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-        session_date DATE NOT NULL,
+        session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
         points_scored INTEGER DEFAULT 0,
         saves INTEGER DEFAULT 0,
         mvp_award BOOLEAN DEFAULT FALSE,
         attendance_status VARCHAR(20) DEFAULT 'Present',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(player_id, session_id)
       )
     `);
 
@@ -238,12 +248,55 @@ app.delete('/api/players/:id', async (req, res) => {
   }
 });
 
-// Add session statistics
+// Get all sessions
+app.get('/api/sessions', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, session_date, created_at 
+      FROM sessions 
+      ORDER BY session_date DESC
+    `);
+    
+    res.json({ sessions: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+// Add new session (just date)
 app.post('/api/sessions', async (req, res) => {
-  const { player_id, session_date, points_scored, saves, mvp_award } = req.body;
+  const { session_date } = req.body;
   
-  if (!player_id || !session_date) {
-    return res.status(400).json({ error: 'Player ID and Session Date are required' });
+  if (!session_date) {
+    return res.status(400).json({ error: 'Session date is required' });
+  }
+  
+  try {
+    const result = await pool.query(
+      `INSERT INTO sessions (session_date) 
+       VALUES ($1) RETURNING id`,
+      [session_date]
+    );
+    
+    res.json({ 
+      message: 'Session added successfully',
+      session_id: result.rows[0].id
+    });
+  } catch (err) {
+    if (err.code === '23505') { // Unique violation
+      res.status(400).json({ error: `Session for date "${session_date}" already exists` });
+    } else {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
+
+// Add player statistics to a session
+app.post('/api/player-sessions', async (req, res) => {
+  const { player_id, session_id, points_scored, saves, mvp_award } = req.body;
+  
+  if (!player_id || !session_id) {
+    return res.status(400).json({ error: 'Player ID and Session ID are required' });
   }
   
   const client = await pool.connect();
@@ -251,27 +304,40 @@ app.post('/api/sessions', async (req, res) => {
   try {
     await client.query('BEGIN');
     
-    // Insert session record
+    // Insert or update player session stats
     await client.query(
-      `INSERT INTO player_sessions (player_id, session_date, points_scored, saves, mvp_award) 
-       VALUES ($1, $2, $3, $4, $5)`,
-      [player_id, session_date, points_scored, saves, mvp_award]
+      `INSERT INTO player_sessions (player_id, session_id, points_scored, saves, mvp_award) 
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (player_id, session_id) 
+       DO UPDATE SET 
+         points_scored = EXCLUDED.points_scored,
+         saves = EXCLUDED.saves,
+         mvp_award = EXCLUDED.mvp_award`,
+      [player_id, session_id, points_scored || 0, saves || 0, mvp_award || false]
     );
     
-    // Update player stats
+    // Update player overall stats
     await client.query(
       `UPDATE players 
-       SET total_points_scored = total_points_scored + $1,
-           total_saves = total_saves + $2,
-           mvp_awards_count = mvp_awards_count + $3,
-           sessions_attended_count = sessions_attended_count + 1,
+       SET total_points_scored = COALESCE((
+         SELECT SUM(points_scored) FROM player_sessions WHERE player_id = $1
+       ), 0),
+           total_saves = COALESCE((
+         SELECT SUM(saves) FROM player_sessions WHERE player_id = $1
+       ), 0),
+           mvp_awards_count = COALESCE((
+         SELECT COUNT(*) FROM player_sessions WHERE player_id = $1 AND mvp_award = true
+       ), 0),
+           sessions_attended_count = COALESCE((
+         SELECT COUNT(*) FROM player_sessions WHERE player_id = $1
+       ), 0),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $4`,
-      [points_scored, saves, mvp_award ? 1 : 0, player_id]
+       WHERE id = $1`,
+      [player_id]
     );
     
     await client.query('COMMIT');
-    res.json({ message: 'Session statistics added successfully' });
+    res.json({ message: 'Player session statistics added successfully' });
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
@@ -280,7 +346,25 @@ app.post('/api/sessions', async (req, res) => {
   }
 });
 
-// Get dashboard stats - UPDATED WITH SESSION COUNT
+// Get player sessions with session details
+app.get('/api/players/:id/sessions', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT ps.*, s.session_date 
+       FROM player_sessions ps 
+       JOIN sessions s ON ps.session_id = s.id 
+       WHERE ps.player_id = $1 
+       ORDER BY s.session_date DESC`,
+      [req.params.id]
+    );
+    
+    res.json({ sessions: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get dashboard stats - UPDATED
 app.get('/api/dashboard', async (req, res) => {
   try {
     const stats = {};
@@ -289,13 +373,13 @@ app.get('/api/dashboard', async (req, res) => {
     const totalPlayersResult = await pool.query('SELECT COUNT(*) as total_players FROM players');
     stats.total_players = parseInt(totalPlayersResult.rows[0].total_players);
     
-    // Total sessions played - NEW
-    const totalSessionsResult = await pool.query('SELECT COUNT(*) as total_sessions FROM player_sessions');
+    // Total sessions played
+    const totalSessionsResult = await pool.query('SELECT COUNT(*) as total_sessions FROM sessions');
     stats.total_sessions = parseInt(totalSessionsResult.rows[0].total_sessions);
     
-    // Total points scored - NEW
-    const totalPointsResult = await pool.query('SELECT COALESCE(SUM(total_points_scored), 0) as total_points FROM players');
-    stats.total_points = parseInt(totalPointsResult.rows[0].total_points);
+    // Total MVP awards
+    const totalMvpResult = await pool.query('SELECT COUNT(*) as total_mvps FROM player_sessions WHERE mvp_award = true');
+    stats.total_mvps = parseInt(totalMvpResult.rows[0].total_mvps);
     
     // Top MVP players
     const topMvpsResult = await pool.query(`
@@ -307,7 +391,7 @@ app.get('/api/dashboard', async (req, res) => {
     `);
     stats.top_mvps = topMvpsResult.rows;
     
-    // Recent players - NEW
+    // Recent players
     const recentPlayersResult = await pool.query(`
       SELECT full_name, player_id, created_at 
       FROM players 
@@ -316,25 +400,20 @@ app.get('/api/dashboard', async (req, res) => {
     `);
     stats.recent_players = recentPlayersResult.rows;
     
+    // Recent sessions
+    const recentSessionsResult = await pool.query(`
+      SELECT session_date, created_at 
+      FROM sessions 
+      ORDER BY session_date DESC 
+      LIMIT 5
+    `);
+    stats.recent_sessions = recentSessionsResult.rows;
+    
     console.log('📊 Dashboard stats:', stats);
     res.json(stats);
   } catch (err) {
     console.error('Dashboard error:', err);
     res.status(500).json({ error: 'Failed to fetch dashboard stats' });
-  }
-});
-
-// Get player sessions
-app.get('/api/players/:id/sessions', async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT * FROM player_sessions WHERE player_id = $1 ORDER BY session_date DESC',
-      [req.params.id]
-    );
-    
-    res.json({ sessions: result.rows });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
   }
 });
 
@@ -381,6 +460,10 @@ app.get('/edit-player', (req, res) => {
 
 app.get('/add-session', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'add-session.html'));
+});
+
+app.get('/add-player-stats', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'add-player-stats.html'));
 });
 
 // 404 handler

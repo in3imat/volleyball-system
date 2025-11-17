@@ -1,20 +1,23 @@
 <!DOCTYPE html>
 <html lang="ar">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Player - Volleyball Management</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <nav class="nav">
         <div class="nav-container">
             <a href="/" class="nav-brand">Volleyball Community</a>
             <div class="nav-links">
                 <a href="/" class="nav-link">Dashboard</a>
-                <a href="/players-list.html" class="nav-link">Players List</a>
-                <a href="/add-player.html" class="nav-link">Add Player</a>
-                <a href="/add-session.html" class="nav-link">Add Session</a>
+                <a href="/players-list" class="nav-link">Players List</a>
+                <a href="/add-player" class="nav-link">Add Player</a>
+                <a href="/add-session" class="nav-link">Add Session</a>
+                <a href="/add-player-stats" class="nav-link">Add Player Stats</a>
             </div>
         </div>
     </nav>
@@ -110,9 +113,9 @@
         }
 
         // Update player
-        document.getElementById('editPlayerForm').addEventListener('submit', async function(e) {
+        document.getElementById('editPlayerForm').addEventListener('submit', async function (e) {
             e.preventDefault();
-            
+
             const formData = {
                 player_id: document.getElementById('player_id').value,
                 full_name: document.getElementById('full_name').value,
@@ -144,7 +147,7 @@
         });
 
         // Delete player
-        document.getElementById('deletePlayerBtn').addEventListener('click', function() {
+        document.getElementById('deletePlayerBtn').addEventListener('click', function () {
             if (confirm('Are you sure you want to delete this player? This action cannot be undone.')) {
                 deletePlayer();
             }
@@ -187,4 +190,5 @@
         document.addEventListener('DOMContentLoaded', loadPlayerData);
     </script>
 </body>
+
 </html>

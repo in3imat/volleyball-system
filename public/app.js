@@ -42,19 +42,13 @@ async function loadDashboard() {
                 <div class="stat-icon">🏐</div>
                 <h3>Total Sessions</h3>
                 <p class="stat-number">${stats.total_sessions || 0}</p>
-                <p class="stat-description">Games played</p>
+                <p class="stat-description">Games recorded</p>
             </div>
             <div class="stat-card">
                 <div class="stat-icon">⭐</div>
                 <h3>MVP Awards</h3>
-                <p class="stat-number">${stats.top_mvps ? stats.top_mvps.reduce((sum, player) => sum + player.mvp_awards_count, 0) : 0}</p>
+                <p class="stat-number">${stats.total_mvps || 0}</p>
                 <p class="stat-description">Total awards given</p>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">🎯</div>
-                <h3>Total Points</h3>
-                <p class="stat-number">${stats.total_points || 0}</p>
-                <p class="stat-description">Points scored</p>
             </div>
         `;
     }
@@ -87,6 +81,21 @@ async function loadDashboard() {
             `).join('');
         } else {
             recentPlayers.innerHTML = '<div class="no-data">No players yet</div>';
+        }
+    }
+
+    // Display recent sessions
+    const recentSessions = document.getElementById('recent-sessions');
+    if (recentSessions) {
+        if (stats.recent_sessions && stats.recent_sessions.length > 0) {
+            recentSessions.innerHTML = stats.recent_sessions.map(session => `
+                <div class="recent-session-item">
+                    <span class="session-date">${new Date(session.session_date).toLocaleDateString()}</span>
+                    <span class="session-added">Added: ${new Date(session.created_at).toLocaleDateString()}</span>
+                </div>
+            `).join('');
+        } else {
+            recentSessions.innerHTML = '<div class="no-data">No sessions yet</div>';
         }
     }
 

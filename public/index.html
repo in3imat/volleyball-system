@@ -1,20 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Volleyball Player Management</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <nav class="nav">
         <div class="nav-container">
             <a href="/" class="nav-brand">🏐 Volleyball Community</a>
             <div class="nav-links">
-                <a href="/" class="nav-link active">Dashboard</a>
+                <a href="/" class="nav-link">Dashboard</a>
                 <a href="/players-list" class="nav-link">Players List</a>
                 <a href="/add-player" class="nav-link">Add Player</a>
                 <a href="/add-session" class="nav-link">Add Session</a>
+                <a href="/add-player-stats" class="nav-link">Add Player Stats</a>
             </div>
         </div>
     </nav>
@@ -23,12 +26,12 @@
         <div id="app">
             <div class="dashboard">
                 <h1>Volleyball Player Management Dashboard</h1>
-                
+
                 <!-- Statistics Grid -->
                 <div id="dashboard-stats" class="stats-grid">
                     <!-- Stats will be loaded here by JavaScript -->
                 </div>
-                
+
                 <div class="dashboard-sections">
                     <!-- Left Column -->
                     <div class="dashboard-column">
@@ -79,4 +82,5 @@
 
     <script src="app.js"></script>
 </body>
+
 </html>
