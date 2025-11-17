@@ -18,27 +18,43 @@ async function fetchData(endpoint) {
 
 // Display dashboard statistics
 async function loadDashboard() {
+    console.log('🔄 Loading dashboard data...');
+    
     const stats = await fetchData('/api/dashboard');
     if (!stats) {
         showError('Cannot connect to server. Please make sure the server is running.');
         return;
     }
 
+    console.log('📊 Dashboard stats received:', stats);
+
     // Display main statistics
     const statsGrid = document.getElementById('dashboard-stats');
     if (statsGrid) {
         statsGrid.innerHTML = `
             <div class="stat-card">
+                <div class="stat-icon">👥</div>
                 <h3>Total Players</h3>
                 <p class="stat-number">${stats.total_players || 0}</p>
+                <p class="stat-description">Registered in system</p>
             </div>
             <div class="stat-card">
+                <div class="stat-icon">🏐</div>
                 <h3>Total Sessions</h3>
-                <p class="stat-number">${stats.attendance_stats?.total_sessions || 0}</p>
+                <p class="stat-number">${stats.total_sessions || 0}</p>
+                <p class="stat-description">Games played</p>
             </div>
             <div class="stat-card">
-                <h3>Avg Attendance</h3>
-                <p class="stat-number">${stats.attendance_stats?.avg_attendance?.toFixed(1) || 0}</p>
+                <div class="stat-icon">⭐</div>
+                <h3>MVP Awards</h3>
+                <p class="stat-number">${stats.top_mvps ? stats.top_mvps.reduce((sum, player) => sum + player.mvp_awards_count, 0) : 0}</p>
+                <p class="stat-description">Total awards given</p>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🎯</div>
+                <h3>Total Points</h3>
+                <p class="stat-number">${stats.total_points || 0}</p>
+                <p class="stat-description">Points scored</p>
             </div>
         `;
     }
@@ -49,16 +65,32 @@ async function loadDashboard() {
         if (stats.top_mvps && stats.top_mvps.length > 0) {
             topMvps.innerHTML = stats.top_mvps.map(player => `
                 <div class="mvp-item">
-                    <span>${player.full_name}</span>
-                    <span class="mvp-count">${player.mvp_awards_count} MVPs</span>
+                    <span class="player-name">${player.full_name}</span>
+                    <span class="mvp-count">${player.mvp_awards_count} MVP${player.mvp_awards_count !== 1 ? 's' : ''}</span>
                 </div>
             `).join('');
         } else {
-            topMvps.innerHTML = '<p>No MVP data available yet</p>';
+            topMvps.innerHTML = '<div class="no-data">No MVP awards yet</div>';
         }
     }
 
-    // Display players
+    // Display recent players
+    const recentPlayers = document.getElementById('recent-players');
+    if (recentPlayers) {
+        if (stats.recent_players && stats.recent_players.length > 0) {
+            recentPlayers.innerHTML = stats.recent_players.map(player => `
+                <div class="recent-player-item">
+                    <span class="player-name">${player.full_name}</span>
+                    <span class="player-id">${player.player_id}</span>
+                    <span class="join-date">${new Date(player.created_at).toLocaleDateString()}</span>
+                </div>
+            `).join('');
+        } else {
+            recentPlayers.innerHTML = '<div class="no-data">No players yet</div>';
+        }
+    }
+
+    // Display players grid
     const players = await fetchData('/api/players');
     const playersList = document.getElementById('players-list');
     
@@ -85,6 +117,10 @@ async function loadDashboard() {
                             <span>Points:</span>
                             <strong>${player.total_points_scored}</strong>
                         </div>
+                        <div class="stat">
+                            <span>Saves:</span>
+                            <strong>${player.total_saves}</strong>
+                        </div>
                     </div>
                     <div class="player-actions">
                         <button onclick="viewPlayer(${player.id})" class="btn btn-primary">
@@ -94,14 +130,27 @@ async function loadDashboard() {
                 </div>
             `).join('');
         } else {
-            playersList.innerHTML = '<p>No players found. <a href="/add-player">Add your first player!</a></p>';
+            playersList.innerHTML = `
+                <div class="no-players-message">
+                    <p>No players found in the system.</p>
+                    <a href="/add-player" class="btn btn-primary">Add Your First Player</a>
+                </div>
+            `;
         }
     }
 }
 
+// Auto-refresh dashboard every 30 seconds
+function startAutoRefresh() {
+    setInterval(() => {
+        console.log('🔄 Auto-refreshing dashboard...');
+        loadDashboard();
+    }, 30000); // 30 seconds
+}
+
 // View player details
 function viewPlayer(playerId) {
-    window.location.href = `/player-stats.html?id=${playerId}`;
+    window.location.href = `/players-list`;
 }
 
 // Show error message
@@ -122,4 +171,5 @@ function showError(message) {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🏐 Volleyball System Loaded');
     loadDashboard();
+    startAutoRefresh();
 });

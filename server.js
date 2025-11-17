@@ -280,7 +280,7 @@ app.post('/api/sessions', async (req, res) => {
   }
 });
 
-// Get dashboard stats
+// Get dashboard stats - UPDATED WITH SESSION COUNT
 app.get('/api/dashboard', async (req, res) => {
   try {
     const stats = {};
@@ -289,25 +289,34 @@ app.get('/api/dashboard', async (req, res) => {
     const totalPlayersResult = await pool.query('SELECT COUNT(*) as total_players FROM players');
     stats.total_players = parseInt(totalPlayersResult.rows[0].total_players);
     
+    // Total sessions played - NEW
+    const totalSessionsResult = await pool.query('SELECT COUNT(*) as total_sessions FROM player_sessions');
+    stats.total_sessions = parseInt(totalSessionsResult.rows[0].total_sessions);
+    
+    // Total points scored - NEW
+    const totalPointsResult = await pool.query('SELECT COALESCE(SUM(total_points_scored), 0) as total_points FROM players');
+    stats.total_points = parseInt(totalPointsResult.rows[0].total_points);
+    
     // Top MVP players
     const topMvpsResult = await pool.query(`
       SELECT full_name, mvp_awards_count 
       FROM players 
+      WHERE mvp_awards_count > 0
       ORDER BY mvp_awards_count DESC 
       LIMIT 5
     `);
     stats.top_mvps = topMvpsResult.rows;
     
-    // Attendance stats
-    const attendanceResult = await pool.query(`
-      SELECT 
-        COUNT(*) as total_sessions,
-        COALESCE(AVG(sessions_attended_count), 0) as avg_attendance,
-        COALESCE(MAX(sessions_attended_count), 0) as max_attendance
-      FROM players
+    // Recent players - NEW
+    const recentPlayersResult = await pool.query(`
+      SELECT full_name, player_id, created_at 
+      FROM players 
+      ORDER BY created_at DESC 
+      LIMIT 5
     `);
-    stats.attendance_stats = attendanceResult.rows[0];
+    stats.recent_players = recentPlayersResult.rows;
     
+    console.log('📊 Dashboard stats:', stats);
     res.json(stats);
   } catch (err) {
     console.error('Dashboard error:', err);
@@ -338,6 +347,16 @@ app.get('/api/check-player-id/:player_id', async (req, res) => {
     );
     
     res.json({ exists: parseInt(result.rows[0].count) > 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Database repair endpoint
+app.post('/api/repair-database', async (req, res) => {
+  try {
+    await pool.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS age INTEGER');
+    res.json({ message: 'Database repaired successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
